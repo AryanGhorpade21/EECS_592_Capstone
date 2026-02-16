@@ -1,3 +1,17 @@
+''' Prologue Comments 
+Artifact: database.py
+Description: Defines sqlite database class to store network packets.
+Creation Date: 2/13/2026
+Revision Dates: none
+Preconditions:
+    No inputs.
+Postconditions:
+    No outputs. 
+Errors/Exceptions: none
+Side effects: none
+Invariants: none
+'''
+
 import sqlite3
 from datetime import datetime
 

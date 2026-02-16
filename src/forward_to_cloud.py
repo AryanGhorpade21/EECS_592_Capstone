@@ -1,3 +1,20 @@
+''' Prologue Comments 
+Artifact: forward_to_cloud.py
+Description: Takes metadata object and sends a PUT request to AWS, which then stores JSON in S3 storage bucket.
+Programmer's name: Gavin Billinger
+Creation Date: 2/15/2026
+Revision Dates: none
+Preconditions:
+    Input is metadata object.
+Postconditions:
+    Returns success or failure of forwarding attempt.
+Errors/Exceptions:
+    Errors can occur at packet forwarding step depending on whether or not AWS services are available.
+        For instance, Error 500. Or if the invoked API URL is wrong, Error 404.
+Side effects: none
+Invariants: none
+'''
+
 import json
 import time
 import requests

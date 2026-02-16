@@ -1,3 +1,23 @@
+''' Prologue Comments 
+Artifact: Metadata_extraction.py
+Description: Runs continuous packet sniffing, extracts packet metadata, and forwards to cloud storage.
+Programmer's name: Aryan Vinod Ghorpade
+Creation Date: 2/12/2026
+Revision Dates:
+    2/15/2026: Revised to allow virtual environment to run.
+    2/15/2026: Updated to include cloud forwader functionality.
+Preconditions:
+    Currently no direct user inputs. Network traffic picked up on the machine is obtained automatically.
+Postconditions:
+    Returns status of packet capture, metadata, and success/failure of the forwarder to the cloud.
+    Creates database for packets on machine if not present, otherwise writes to the database.
+Errors/Exceptions:
+    Errors can occur at packet forwarding step depending on whether or not AWS services are available.
+        For instance, Error 500. Or if the invoked API URL is wrong, Error 404.
+Side effects: none
+Invariants: none
+'''
+
 from scapy.all import IP, TCP, UDP
 from database import PacketDatabase
 import capture_packet as capture_packet
