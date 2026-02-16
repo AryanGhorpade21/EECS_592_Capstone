@@ -2,6 +2,7 @@ from scapy.all import IP, TCP, UDP
 from database import PacketDatabase
 import capture_packet
 from datetime import datetime
+from forward_to_cloud import forward_metadata
 
 def extract_metadata(packet):
     metadata = {}
@@ -39,6 +40,7 @@ def main():
             packet = capture_packet.packets.get()
             metadata = extract_metadata(packet)
             if metadata:
+                forward_metadata(metadata)
                 db.insert_metadata(metadata)
                 print(f"Stored: {metadata}")
     except KeyboardInterrupt:
