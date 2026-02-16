@@ -1,7 +1,7 @@
 from scapy.all import sniff
 from queue import Queue
 
-INTERFACE = "en0"
+INTERFACE = "eth0"
 
 packets = Queue()
 
