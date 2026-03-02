@@ -5,62 +5,64 @@ from datetime import datetime, timezone
 
 import boto3
 
-# Initialize S3 client
 s3 = boto3.client("s3")
 
-# S3 bucket name passed as environment variable
-BUCKET = os.environ["LOG_BUCKET"]
+BUCKET = os.environ.get("LOG_BUCKET", "monitoring-pcap-storage")
 
 
-def _parse_timestamp(ts):
+def _parse_timestamp(ts: str) -> datetime:
     """
-    Parses incoming timestamp.
-    Supports ISO 8601 (YYYY-MM-DDTHH:MM:SSZ)
-    and project format (DD/MM/YYYY -- HH:MM:SS).
-    Defaults to current UTC time if invalid.
+    Supports:
+      - ISO 8601: 2026-02-28T03:10:20Z
+      - Project format: DD/MM/YYYY -- HH:MM:SS
+    Falls back to current UTC time if invalid/missing.
     """
     if not ts or not isinstance(ts, str):
         return datetime.now(timezone.utc)
 
+    # ISO 8601 (Zulu)
     try:
         if "T" in ts and ts.endswith("Z"):
             return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
     except Exception:
         pass
 
+    # Project format
     try:
         return datetime.strptime(ts, "%d/%m/%Y -- %H:%M:%S").replace(tzinfo=timezone.utc)
     except Exception:
         return datetime.now(timezone.utc)
 
 
-def handler(event, context):
-    """
-    Lambda entry point.
-    Receives log JSON from API Gateway,
-    normalizes required fields,
-    and stores record in S3 using partitioned schema.
-    """
+def _extract_payload(event):
+    
+    body = event.get("body", event)
 
-    body = event.get("body", "{}")
+    if isinstance(body, str):
+        try:
+            return json.loads(body)
+        except Exception:
+            return {"raw_body": body}
 
-    # Handle base64 encoding if enabled in API Gateway
-    if event.get("isBase64Encoded"):
-        import base64
-        body = base64.b64decode(body).decode("utf-8")
+    if isinstance(body, dict):
+        return body
 
-    data = json.loads(body) if isinstance(body, str) else body
+    return {"raw_body": str(body)}
 
-    # Normalize timestamp
+
+def lambda_handler(event, context):
+    data = _extract_payload(event)
+
+    # Normalize timestamp for indexing + partitions
     ts = _parse_timestamp(data.get("timestamp"))
     iso_ts = ts.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # Required indexing fields 
+    # Required index fields 
     severity = str(data.get("severity", "INFO")).upper()
     rule_id = str(data.get("rule_id", "NONE")).upper()
     event_type = str(data.get("event_type", "metadata")).lower()
 
-    # Final structured record stored in S3
+    # Store normalized fields + original payload 
     record = {
         "timestamp": iso_ts,
         "severity": severity,
@@ -69,7 +71,7 @@ def handler(event, context):
         "original": data
     }
 
-    # Partitioned S3 key for efficient retrieval
+    # Partitioned S3 key schema
     key = (
         "ingested/logs/"
         f"year={ts:%Y}/month={ts:%m}/day={ts:%d}/hour={ts:%H}/"
@@ -77,7 +79,7 @@ def handler(event, context):
         f"{uuid.uuid4().hex}.json"
     )
 
-    # Store encrypted object in S3
+    # Write to S3 with encryption at rest
     s3.put_object(
         Bucket=BUCKET,
         Key=key,
@@ -88,6 +90,5 @@ def handler(event, context):
 
     return {
         "statusCode": 200,
-        "headers": {"Content-Type": "application/json"},
         "body": json.dumps({"ok": True, "s3_key": key})
     }
