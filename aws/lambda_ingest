@@ -9,9 +9,6 @@ s3 = boto3.client("s3")
 BUCKET = os.environ["LOG_BUCKET"]
 
 def _parse_timestamp(ts):
-    # Accept both formats:
-    # ISO 8601: 2026-02-28T03:10:20Z
-    # Your project format: DD/MM/YYYY -- HH:MM:SS
     if not ts or not isinstance(ts, str):
         return datetime.now(timezone.utc)
 
