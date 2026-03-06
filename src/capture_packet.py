@@ -17,6 +17,7 @@ Invariants: none
 from scapy.all import sniff
 from queue import Queue
 import os
+import threading
 
 INTERFACE = "eth0"
 # case for Linux/MAC
@@ -28,4 +29,8 @@ packets = Queue()
 def handle(pkt):
     packets.put(pkt)
 
-sniff(iface=INTERFACE, prn=handle, store=False)
+def start_sniffer():
+    sniff(iface=INTERFACE, prn=handle, store=False)
+
+sniffer_thread = threading.Thread(target=start_sniffer, daemon=True)
+sniffer_thread.start()
