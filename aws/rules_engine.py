@@ -1,4 +1,3 @@
-# THIS FILE IS NOT OPERABLE FROM GITHUB DIRECTORY
 # THIS IS A RECREATION OF THE LAMBDA CODE LOCATED ON AWS
 
 # THIS CODE IS REACTIVE UPON PACKET LOGS ENTERING THE S3 BUCKET.
@@ -7,7 +6,10 @@
 #!/usr/bin/env python3
 import json
 import datetime
+import time
+from decimal import Decimal
 import boto3
+from boto3.dynamodb.conditions import Key
 import logging
 import yaml
 from collections import defaultdict
@@ -17,6 +19,9 @@ from urllib.parse import unquote_plus
 S3_BUCKET      = "monitoring-pcap-storage"
 RULES_PREFIX   = "rules/"
 ALERTS_PREFIX  = "alerts/"
+
+dynamodb = boto3.resource("dynamodb")
+TABLE = dynamodb.Table("net_detection_state")
 
 WHITELIST_IPS = {
     "169.254.169.254",
@@ -78,34 +83,81 @@ RULES = load_rules_from_s3()
 
 class RuleTracker:
     def __init__(self):
-        self._events   = defaultdict(list)
-        self._cooldown = {}
+        pass
+
+    def _put_event(self, pk, sk, ttl_seconds):
+        now = int(time.time())
+        ttl = now + ttl_seconds
+
+        TABLE.put_item(
+            Item={
+                "pk": pk,
+                "sk": sk,
+                "ttl": ttl
+            }
+        )
 
     def record(self, rule_name, src_ip, metadata=None):
-        key = (rule_name, src_ip)
-        self._events[key].append((datetime.datetime.utcnow().timestamp(), metadata))
+        ts = int(time.time())
+        pk = f"{rule_name}#{src_ip}"
+        sk = f"{ts}#{metadata}" if metadata else str(ts)
+
+        # All packet events expire after 60 seconds
+        self._put_event(pk, sk, ttl_seconds=60)
+
+    def _query_recent(self, pk, window_seconds):
+        cutoff = int(time.time()) - window_seconds
+
+        resp = TABLE.query(
+            KeyConditionExpression=Key("pk").eq(pk)
+        )
+
+        items = resp.get("Items", [])
+        return [
+            item for item in items
+            if int(item["sk"].split("#")[0]) >= cutoff
+        ]
 
     def count_in_window(self, rule_name, src_ip, window_seconds):
-        key = (rule_name, src_ip)
-        cutoff = datetime.datetime.utcnow().timestamp() - window_seconds
-        self._events[key] = [(ts, m) for ts, m in self._events[key] if ts >= cutoff]
-        return len(self._events[key])
+        pk = f"{rule_name}#{src_ip}"
+        items = self._query_recent(pk, window_seconds)
+        return len(items)
 
     def distinct_values_in_window(self, rule_name, src_ip, window_seconds):
-        key = (rule_name, src_ip)
-        cutoff = datetime.datetime.utcnow().timestamp() - window_seconds
-        self._events[key] = [(ts, m) for ts, m in self._events[key] if ts >= cutoff]
-        return {m for _, m in self._events[key] if m is not None}
+        pk = f"{rule_name}#{src_ip}"
+        items = self._query_recent(pk, window_seconds)
+
+        values = set()
+        for item in items:
+            parts = item["sk"].split("#")
+            if len(parts) > 1:
+                values.add(parts[1])
+        return values
 
     def is_on_cooldown(self, rule_name, src_ip, cooldown_seconds):
-        key = (rule_name, src_ip)
-        last = self._cooldown.get(key)
-        if last and (datetime.datetime.utcnow().timestamp() - last) < cooldown_seconds:
-            return True
-        return False
+        pk = f"cooldown#{rule_name}#{src_ip}"
+        resp = TABLE.get_item(Key={"pk": pk, "sk": "state"})
+
+        if "Item" not in resp:
+            return False
+
+        last = resp["Item"]["timestamp"]
+        return (time.time() - last) < cooldown_seconds
 
     def mark_alerted(self, rule_name, src_ip):
-        self._cooldown[(rule_name, src_ip)] = datetime.datetime.utcnow().timestamp()
+        now = int(time.time())
+        ttl = now + 300  # cooldown entries expire after 5 minutes
+
+        pk = f"cooldown#{rule_name}#{src_ip}"
+
+        TABLE.put_item(
+            Item={
+                "pk": pk,
+                "sk": "state",
+                "timestamp": now,
+                "ttl": ttl
+            }
+        )
 
 # ─────────────────────── PACKET PARSER ─────────────────────
 
