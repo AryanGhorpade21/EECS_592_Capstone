@@ -1,18 +1,18 @@
 """
 Author: Aryan Ghorpade
 Date: 2/15/2026
-Revision Date: 3/4/2026
+Revision Date: 3/8/2026
 Program Name: alert_gentrator.py
 
 Program Description:    
 Generates alert notifications for broken rules detected by rules_parser.py
-and sends an SMS via AWS SNS with the alert details.
+and sends an email via AWS SNS topic subscription with the alert details.
 """
 import boto3
 import ipaddress
 import rules_parser
 
-PHONE_NUMBER = '+17857275025'  # Update this number as needed
+SNS_TOPIC_ARN = 'arn:aws:sns:us-east-2:981743521769:sentinet_alert'
 
 INTERNAL_NETWORKS = [
     ipaddress.ip_network("10.0.0.0/8"),
@@ -55,10 +55,11 @@ def evaluate_condition(condition, network_data):
 
     return False
 
-def send_sns_notification(message, phone_number=PHONE_NUMBER):
-    sns_client = boto3.client('sns')
+def send_sns_notification(subject, message, topic_arn=SNS_TOPIC_ARN):
+    sns_client = boto3.client('sns', region_name='us-east-2')
     response = sns_client.publish(
-        PhoneNumber=phone_number,
+        TopicArn=topic_arn,
+        Subject=subject,
         Message=message
     )
     return response
@@ -68,10 +69,11 @@ def check_rules(network_data):
     for rule in rules:
         broken = all(evaluate_condition(c, network_data) for c in rule.conditions)
         if broken:
+            subject = f"NETWORK ALERT [{rule.severity.upper()}] - Rule {rule.id}"
             message = (
                 f"NETWORK ALERT\n"
                 f"Rule ID: {rule.id}\n"
                 f"Severity: {rule.severity.upper()}\n"
                 f"Description: {rule.description}"
             )
-            send_sns_notification(message)
+            send_sns_notification(subject, message)
