@@ -9,7 +9,7 @@ Generates alerts notifications for broken rules detected by rules_parser.py.
 and sends a PUT request to AWS SNS topic with the alert details.
 """
 import boto3
-import src.rules_parser
+import rules_parser
 
 # Configuration
 TOPIC_ARN = 'arn:aws:sns:us-east-1:981743521769:my-topic'
