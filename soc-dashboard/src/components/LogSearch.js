@@ -19,7 +19,7 @@ export default function LogSearch() {
             <option>Alert Type</option>
             <option>Port Scan</option>
             <option>SSH Brute Force</option>
-            <option>DNS Anomaly</option>
+            <option>Other Filler Alert Types</option>
           </select>
           <input type="datetime-local" />
         </div>
