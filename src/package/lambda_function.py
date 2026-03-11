@@ -31,5 +31,6 @@ aws lambda create-function
 from alert_gentrator import check_rules
 
 def lambda_handler(event, context):
-    check_rules()
+    network_data = event.get("network_data", {})
+    check_rules(network_data)
     return {"status": "Rules checked"}
